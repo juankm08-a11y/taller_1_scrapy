@@ -1,58 +1,65 @@
+import os
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 import time
-import os
+import datetime
+import requests
 
-def download_dataset():
+def download_text_html(url,donwload_dir="datasets"):
+  os.makedirs(donwload_dir,exist_ok=True)
+  donwload_dir = os.path.abspath(donwload_dir)
+  
   chrome_options = Options()
+  chrome_options.add_argument("--no-sandbox")
+  chrome_options.add_argument("--disable-dev-shm-usage")
+  chrome_options.add_argument("--start-maximized")
+  
   prefs = {
-      "download.default_directory": os.path.join(os.getcwd(), "datasets"),
-      "download.prompt_for_download": False,
-      "download.directory_upgrade": True,
-      "safebrowsing.enabled": True
+    "download.default_directory":donwload_dir,
+    "download.prompt_for_download":False,
+    "download.directory_upgrade":True,
+    "safebrowsing.enabled":True,
+    "profile.default_content_setting_values.automatic_downloads":1
   }
   chrome_options.add_experimental_option("prefs",prefs)
   
-  driver = webdriver.Chrome(options=chrome_options)
+  service = Service(ChromeDriverManager().install())
+  driver = webdriver.Chrome(service=service, options=chrome_options)
+  wait = WebDriverWait(driver,15)
   
   try:
-    driver.get("https://www.datos.gov.co")
+    print(f"Abriendo página del dataset: {url}")
+    driver.get(url)
     
-    search_box = WebDriverWait(driver,10).until(
-      EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='search']"))
-    ) 
-    
-    search_term = "educacion"
-    search_box.send_keys(search_term)
-    search_box.send_keys(Keys.RETURN)
-    
-    time.sleep(3)
-    
-    first_result = WebDriverWait(driver,10).until(
-      EC.element_to_be_clickable((By.CSS_SELECTOR,".dataset-heading a"))
-    )
-    first_result.click()
-    
-    time.sleep(3)
-    
-    download_button = WebDriverWait(driver,10).until(
-      EC.element_to_be_clickable((By.XPATH,"//a[contains(text(),'CSV)]"))
+    print("Buscando el boton")
+    download_button = wait.until(
+      EC.element_to_be_clickable((By.XPATH,"//a[contains(@class, 'download-file-link') and contains(@class, 'all-caps')]"))
     )
     
-    download_button.click()
+    file_url = download_button.get_attribute("href")
+    print(f"URL directa: {file_url}")
     
-    time.sleep(10)
-    print("Descarga completada exitosamente")
+    filename = os.path.join(donwload_dir,"dataset.csv")
+    print(f"Descargando archivo en: {filename}")
     
+    response = requests.get(file_url)
+    with open(filename,"wb") as f:
+      f.write(response.content)
+      
+    print(f"Archivo descargado correctamente: {filename}")
+      
+  except Exception as e:
+    print("Error durante el proceso:",str(e))
   finally:
+    time.sleep(2)
     driver.quit()
     
-if not os.path.exists("datasets"):
-  os.makedirs("datasets")
+if __name__ == "__main__":
+  dataset_url = "https://www.datos.gov.co/dataset/carto2000lasmalvinas81794024/svry-w33a/about_data"
+  download_text_html(dataset_url)
   
-download_dataset()
-    
